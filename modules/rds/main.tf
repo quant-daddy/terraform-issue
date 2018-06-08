@@ -1,7 +1,7 @@
 resource "aws_db_subnet_group" "mariadb-subnet" {
   name = "mariadb-subnet" #optional
   description = "my maria"
-  subnet_ids = ["${aws_subnet.main-private-1.id}", "${aws_subnet.main-private-2.id}"]
+  subnet_ids = ["${var.SUBNET_IDS}"]
   tags = {
     Name = "Maria secure group"
   }
@@ -17,8 +17,35 @@ resource "aws_db_parameter_group" "mariadb-parameters" {
   }
 }
 
+resource "aws_security_group" "access-mariadb" {
+  vpc_id = "${var.VPC_ID}"
+  name = "allow-mariadb-access"
+  description = "Security group that only allows access to mariadb instance"
+  tags {
+    Name = "allow-mariadb-access"
+  }
+}
+
+resource "aws_security_group" "allow-mariadb" {
+  vpc_id = "${var.VPC_ID}"
+  name = "allow-mariadb"
+  description = "allow ssh into maria"
+  ingress {
+    from_port = 3306
+    to_port = 3306
+    protocol = "tcp"
+    security_groups = ["${aws_security_group.access-mariadb.id}"]
+  }
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_db_instance" "mariadb" {
-  allocated_storage = 100
+  allocated_storage = 20
   engine = "mariadb"
   engine_version = "10.1.31"
   instance_class = "db.t2.micro"
@@ -32,13 +59,9 @@ resource "aws_db_instance" "mariadb" {
   vpc_security_group_ids = ["${aws_security_group.allow-mariadb.id}"] #security group of the db instance
   storage_type = "gp2"
   backup_retention_period = 30
-  availability_zone = "${aws_subnet.main-private-1.availability_zone}"#preferred AZ
+  availability_zone = "${var.PREFERRED_AZ}"#preferred AZ
   skip_final_snapshot =  true #otherwise delete doesn't work
   tags {
     Name = "my-maria"
   }
-}
-
-output "rds" {
-  value = "${aws_db_instance.mariadb.endpoint}"
 }
